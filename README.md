@@ -1,14 +1,14 @@
 # DualCore Task Management on the ESP32
+
 _⚡ a Sparkmate Let's Build boiler-plate ⚡_
 
-
-# Why use Dual Core / Task Management
+## Why use Dual Core / Task Management
 
 If you've worked with Arduinos/ESP32 before you'll be familiar with the conventional code flow:
 
 <image src="./readme_assets/Setup_Loop_flow.jpg" width="500" /><br>
 
-This is great for when you have a predictable, repeatable procedure that runs forever after an initial setup stage, e.g. you set up your sensors, then periodically poll your sensors and stream the results to the cloud over 4G.
+This is great for when you have a predictable, repeatable procedure that runs forever after an initial setup stage, e.g. you set up your sensors, then periodically poll your sensors and push the results to the cloud over 4G.
 
 But some projects require multiple "tasks" to run in parallel after an initial setup. In a task-based system, each task is assigned to do a specific job, and they can all run at the same time, independently of each other. This means that different tasks can start, run, and finish without waiting for other tasks to be completed first.
 
@@ -18,54 +18,56 @@ In some cases, you will not only need multiple tasks to run at the same time, bu
 
 <image src="./readme_assets/Setup_TasksOnCores_flow.jpg" width="500" /><br>
 
-# Tasks explanation (multi-threading behaviour)
+## Tasks explanation (multi-threading behaviour)
 
 On the ESP32, tasks are part of the [FreeRTOS framework](https://www.freertos.org/index.html), whereby we run multiple tasks on the ESP32 at the same time, and the framework evaluates what can/should be run at any given time.
 
-We use a combination of scheduler-handled tasks and verbosely ordered tasks.
+We could use a combination of scheduler-handled tasks and verbosely ordered tasks.
 
-**For verbosely ordered tasks** (such as `c0_sniffAndFillBuffer`) we shouldn't be filling the Upload Buffer with data before we've sniffed data (it not only doesn't make sense to, and it can lead to nasty results), and so we combine these two subtasks under one main task which we instruct to run continuously on a dedicated core.
+**For verbosely ordered tasks** such as `do_A` then `do_B`, we shouldn't be attempting to do B before A is finished: it not only doesn't make sense to, and it can lead to nasty results, and so we combine these two subtasks under one main task which we instruct to run continuously on a dedicated core.
 
 As such, the safest way to ensure that a sub-task B always happens after a sub-task A is to verbosely tell A to run then B to run in code flow, and not trust a scheduler to handle this.
 
-For example,
-In [main_task_handler.h](./include/main_task_handler.h):
+For example, in `do_A` then `do_B` scenario (where B always follows A):
 
 ```cpp
-void Tasks::c0_sniffAndFillBuffer(void *param)
+void Tasks::mainActualTask(void *param)
 {
     for (;;)
+    // because we want this task to keep running again and again
     {
-        DataSniffingTasks::sniff(20); // You must sniff
-        if (DATA_UPLOAD_ENABLED)
-        {
-            DataSniffingTasks::setUploadHistoryChanges(&UploadBufferStream); // Then update and previous upload changes
-            DataSniffingTasks::fillUploadBuffer(&UploadBufferStream); // Then fill the Upload Buffer
-        }
+        doA();
+        doB();
+        vTaskDelay(1000); // Allow the processor to have other tasks do stuff now, and wait for 1 second.
     }
 }
 ```
 
-These sub-tasks can be found in the files in [tasks](./include/tasks/) folder. In the example above, all of the sub-tasks can be found in [data_sniffing.h](./include/tasks/data_sniffing.h) where we then leverage specific code from bricks, for example (simplified code):
+**For scheduler-handled tasks** such as `doA` but in parallel (or otherwise) `doB`, we want task A to run whenever task B is not busy and visa versa. We could set these to be the same priority as each other, or make one task a higher priority than the other.
 
 ```cpp
-    void sniff(int time_limit = 3000)
+void Tasks::taskA(void *param)
+{
+    for (;;)
+    // because we want this task to keep running again and again
     {
-        unsigned long int time_now = millis();
-        FileHandler::openFileForAppend(SESSION_FILE_NAME.c_str());
-        while (millis() < time_now + (time_limit))
-        {
-            NMEA2000.ParseMessages();
-            Accelerometer.checkAccel();
-        }
-        FileHandler::closeFileForAppend(SESSION_FILE_NAME.c_str());
+        doA();
+        vTaskDelay(1000); // Task B and other tasks will run
     }
+}
+
+void Tasks::taskB(void *param)
+{
+    for (;;)
+    // because we want this task to keep running again and again
+    {
+        doB();
+        vTaskDelay(1000); // Task A and other tasks will run
+    }
+}
 ```
 
-**For scheduler-handled tasks** (such as `c1_updateRTCFromNetwork`), we want this task to run whenever the Uploader is not busy, and CORE 1 has some availability. We set this to the same priority as `c1_uploadFromUploadBuffer`, and allow the scheduler to determine when it makes sense to run it. We try to update the RTC at the beginning of operations, and if we were not successful we "sleep the task" for 20s and wait to try again later. Once this task has successfully completed we delete it, i.e. we only update the RTC once per session.
-
-
-# Code structure
+## Code structure
 
 `main.cpp` calls the task handler declared in `main_task_handler.h` where we also assign priorities to various tasks.
 
@@ -92,19 +94,36 @@ include/bricks/*                ← ''
 lib/*                           ← ''
 ```
 
-**Why no src (.cpp) files?**
+# Super fast Accelerometer logging _(example of repo)_
 
-[You don't need both anymore!](https://stackoverflow.com/questions/1305947/why-does-c-need-a-separate-header-file#:~:text=The%20answer%20is%20that%20C%2B%2B,everything%20in%20the%20header%20files.) _(if you're careful, and you use `pragma once`)_
+In this repo I have an example that has two intense and critical tasks running in parallel after an initial set up period.
+We're going to attempt to read data from an accelerometer at 1kHz and write it to an SD card. The trouble is, making a single core ask the accelerometer for data, waiting for a response, parsing the data, then dumping it (quickly and safely) to an SD card takes a very long time, and with just one core we max out at around 100 Hz only.
 
-# Using other Sparkmate Let's Build Bricks
+So, instead, I can dedicate one core exclusively to talking to and parsing the accelerometer data, and then the ESP32's second core exclusively to dumping that data to the SD card (safely).
 
-In order to keep it very clear which function belongs to which brick we've adopted Namespaces. For example `TimeHandler::setRTCFromEpoch` found in [bricks/time_handler.h](./include/bricks/time_handler.h), which is responsible for setting the time on the Real Time Clock from an epoch time. We have done this entirely for the sake of human readibility, not compilation/performance, etc.
+Another cool (and critical) benefit of this is that if the SD card starts to slow down momentarily, which often happens when writing long strings or when we need to close and then open the file again to avoid corruption, this slowing down will not affect the accelerometer read frequency because it's handled on a completely separate core.
 
-You will find that all bricks will use a PascalCased namespace reflective of the filename. The exception is [optimized_subsampler\_\_c.h](./include/bricks/optimized_subsampler__c.h) which is a class, not a namespace, as we have multiple subsamplers for different session uploads.
+These two tasks can be found in
 
-Namespaces act like objects (from a human readibility perspective) and so are essentially treated as non-replicable (i.e. we only have one `FileHandler` brick, only one `UploadsCacher` brick, etc).
+```cpp
+PeripheralsTasks::c0_bufferWriteToSD()
+```
 
-In the case of the Optimized Subsampler, we create two subsamplers at runtime. One for the working SESSION file, and one for any old sessions we're uploading. This keeps us uploading only the most relevant data.
+and
+
+```cpp
+SensorTasks::c1_writeAccelToBuffer
+```
+
+Both are pinned to different cores. And both share a LoopbackStreamBuffer to transfer the data from one side to the other, the:
+
+```cpp
+FileHandler::SESSION_Loopback
+```
+
+You can explore the code in [main.cpp](./src/main.cpp) to understand how these tasks are assigned and how they work further.
+
+Don't forget to check out a much more informative and involved tutorial at [the FreeRTOS website](https://www.freertos.org/implementation/a00004.html).
 
 # The Sparkmate Let's Build open source policy
 
