@@ -10,7 +10,6 @@
 
 namespace PeripheralsTasks
 {
-
     /**
      * @brief Periodically read from the Upload Buffer and write to the SD Card
      *

@@ -13,10 +13,9 @@
 #include <FS.h>
 #include <SD.h>
 #include <SPI.h>
-#include <EEPROM.h> // read and write from flash memory
 #include <LoopbackStream.h>
 
-// Brick for the FileHandler. We will only ever use one file handler, so this is a namespace (treat as an object), not a class.
+// Brick for the FileHandler
 namespace FileHandler
 {
     String createSessionFileName();
@@ -24,10 +23,8 @@ namespace FileHandler
     File opened_file;
     LoopbackStream SESSION_Loopback(8192);
 
-    namespace
-    {
-        long int pre_append_size = 0;
-    }
+    long int pre_append_size = 0;
+
     Stream *DEBUG_STREAM = &Serial;
     bool DEBUG_BYPASS_SD_CARD = false;
     bool SUPPRESS_BORING_MESSAGES = false;
@@ -79,15 +76,6 @@ namespace FileHandler
      */
     String createSessionFileName()
     {
-        // EEPROM.begin(EEPROM_SIZE);
-        // if (EEPROM.read(0) > MAX_FILES_ALLOWED)
-        // {
-        //     EEPROM.write(0, 0);
-        //     EEPROM.commit();
-        // }
-        // int fileNumber = EEPROM.read(0);
-        // EEPROM.write(0, fileNumber + 1);
-        // EEPROM.commit();
         String file_name = "/" + String(DEVICE_ID) + "_" + String(now()) + ".txt";
         StatusLogger::log(StatusLogger::LEVEL_VERBOSE, StatusLogger::NAME_SD, String("Making new file: ") + file_name);
         return (file_name);
@@ -101,7 +89,7 @@ namespace FileHandler
      * @param message The message you want to write to the file.
      * @returns 0 if successfully written, otherwise false
      */
-    int writeFile(fs::FS &fs, const char *path, const char *message)
+    bool writeFile(fs::FS &fs, const char *path, const char *message)
     {
         StatusLogger::log(StatusLogger::LEVEL_VERBOSE, StatusLogger::NAME_SD, String("Writing file: ") + path);
 
@@ -109,7 +97,7 @@ namespace FileHandler
         if (!file)
         {
             StatusLogger::log(StatusLogger::LEVEL_WARNING, StatusLogger::NAME_SD, "Failed to open file for writing");
-            return 1;
+            return false;
         }
         if (file.print(message) || strcmp(message, "") == 0)
         {
@@ -124,7 +112,7 @@ namespace FileHandler
             }
         }
         file.close();
-        return 0; // TODO: Confusing to have some functions return 0 if good, and others returning True if good
+        return true;
     }
 
     /**
@@ -157,7 +145,7 @@ namespace FileHandler
                 opened_file.write(buf, n);
             }
         }
-        return true; // TODO: Matt, put in logic here
+        return true;
     }
 
     /**
@@ -285,7 +273,7 @@ namespace FileHandler
             StatusLogger::log(StatusLogger::LEVEL_VERBOSE, StatusLogger::NAME_SD, "File doesn't exist. Creating file...");
             File file = SD.open(path, FILE_WRITE, true);
             file.close();
-            if (writeFile(SD, path, ""))
+            if (!writeFile(SD, path, ""))
             {
                 StatusLogger::log(StatusLogger::LEVEL_ERROR, StatusLogger::NAME_SD, "Creating file on SD card failed; " + String(path));
                 return 1;
@@ -317,87 +305,6 @@ namespace FileHandler
         else
         {
             appendFile(SD, SESSION_FILE_NAME.c_str(), dataMessage.c_str());
-        }
-    }
-
-    // Print the N2k enum type to the SD card
-    template <typename T>
-    void PrintN2kEnumTypeToSDnSerial(T a, fs::FS *sd, const char *filename, Stream *OutputStream, bool addLF = false)
-    {
-        const char *str = N2kEnumTypeToStr(a);
-        if (str[0] != '\0')
-        {
-            if (addLF)
-            {
-                writeMessageToSessionFile(String(str) + EOL);
-            }
-            else
-            {
-                writeMessageToSessionFile(String(str));
-            }
-        }
-        else
-        {
-            writeMessageToSessionFile("unknown (" + String(a) + ")");
-        }
-    }
-
-    // Print the label and the value to the SD file inline.
-    template <typename T>
-    void PrintLabelValWithConversionCheckUnDef(const char *label, T val, double (*ConvFunc)(double val) = 0, bool AddLf = false, int8_t Desim = -1)
-    {
-        if (label != NULL)
-        {
-            String msg = ", ";
-            msg += label;
-            msg += "=";
-            writeMessageToSessionFile(msg);
-        }
-
-        if (!N2kIsNA(val))
-        {
-            if (Desim < 0)
-            {
-                if (ConvFunc)
-                {
-#ifdef VERBOSE_NMEA
-                    OutputStream->print(ConvFunc(val));
-#endif
-                    appendFile(SD, SESSION_FILE_NAME.c_str(), String(ConvFunc(val)).c_str());
-                }
-                else
-                {
-#ifdef VERBOSE_NMEA
-                    OutputStream->print(val);
-#endif
-                    appendFile(SD, SESSION_FILE_NAME.c_str(), String(val).c_str());
-                }
-            }
-            else
-            {
-                if (ConvFunc)
-                {
-#ifdef VERBOSE_NMEA
-                    OutputStream->print(ConvFunc(val), Desim);
-#endif
-                    appendFile(SD, SESSION_FILE_NAME.c_str(), String(ConvFunc(val), Desim).c_str()); // FIXME: use desim
-                }
-                else
-                {
-#ifdef VERBOSE_NMEA
-                    OutputStream->print(val, Desim);
-#endif
-                    appendFile(SD, SESSION_FILE_NAME.c_str(), String(val, Desim).c_str());
-                }
-            }
-        }
-        else
-        {
-            writeMessageToSessionFile("NA");
-        }
-        if (AddLf)
-        {
-            writeMessageToSessionFile(String(EOL));
         }
     }
 }

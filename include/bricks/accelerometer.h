@@ -10,34 +10,12 @@
 // libs
 #include <Adafruit_LSM6DS3TRC.h>
 #include <StatusLogger.h>
-// int state = 0;
 
-// Components. TODO: enable seperate instantiation for multiple accelerometers.
-//*********************************************************************************
-// Accelometer functions
-//*********************************************************************************
-
-// Brick for the Accelerometer. Instantiate as many of these as you have accelerometers, so it's classed.
 namespace Accelerometer
 {
-    // Adafruit_LSM6DS33 lsm6ds;
-    Adafruit_LSM6DS3TRC accel_chip; // uncomment to use LSM6DS3TR-C
+    // Adafruit_LSM6DS33 lsm6ds; -> if you have the lsm6ds33 sensor you can download it from here: https://github.com/adafruit/Adafruit_LSM6DS
+    Adafruit_LSM6DS3TRC accel_chip;
     String return_accel;
-
-    typedef struct
-    {
-        float x = 0;
-        float y = 0;
-        float z = 0;
-        float x_g = 0;
-        float y_g = 0;
-        float z_g = 0;
-    } DATAPOINT;
-
-    DATAPOINT datapoints[ACCEL_RATE];
-    int datapoint_count = 0;
-
-    unsigned long last_accel_time = 0;
 
     /**
      * @brief Initialise the accelerometer and run a quick check
@@ -63,34 +41,6 @@ namespace Accelerometer
         accel_chip.configInt2(false, true, false); // gyro DRDY on INT2
         return_accel.reserve(100);                 // reserve 100 chars for this String, just helps with memory management
         return true;
-    }
-
-    /**
-     * @brief Used to fill the accelerometer datapoint list with a new variable
-     */
-    void updateAccelPoint()
-    {
-        sensors_event_t accel;
-        sensors_event_t gyro;
-        sensors_event_t temp;
-
-        accel_chip.getEvent(&accel, &gyro, &temp);
-
-        datapoints[datapoint_count].x = accel.acceleration.x;
-        datapoints[datapoint_count].y = accel.acceleration.y;
-        datapoints[datapoint_count].z = accel.acceleration.z;
-        datapoints[datapoint_count].x_g = gyro.gyro.x;
-        datapoints[datapoint_count].y_g = gyro.gyro.y;
-        datapoints[datapoint_count].z_g = gyro.gyro.z;
-
-        if (datapoint_count >= ACCEL_RATE - 1)
-        {
-            datapoint_count = 0;
-        }
-        else
-        {
-            datapoint_count += 1;
-        }
     }
 
     /**

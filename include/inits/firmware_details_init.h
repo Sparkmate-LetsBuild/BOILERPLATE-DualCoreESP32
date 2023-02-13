@@ -7,8 +7,8 @@
 namespace Firmware
 {
     bool initialized = false;
-    String version = "unknown";
-    String board_version = "uknown";
+    String firmware_version = "unknown";
+    String hardware_version = "uknown";
     String write_date = "unknown";
 
     /**
@@ -19,8 +19,8 @@ namespace Firmware
         Serial.println();
         Serial.println("-- FIRMWARE DETAILS --");
         Serial.println("Device ID: " + String(DEVICE_ID));
-        Serial.println("Firmware version: " + version);
-        Serial.println("Board version: " + board_version);
+        Serial.println("Firmware version: " + firmware_version);
+        Serial.println("Board version: " + hardware_version);
         Serial.println("Firmware write date: " + write_date);
         Serial.println("Environment: " + String(ENVIRONMENT));
         Serial.println("-- END OF FIRMWARE DETAILS --");
@@ -33,12 +33,10 @@ namespace Firmware
     void init()
     {
 #ifdef FIRMWARE_VERSION
-        version = FIRMWARE_VERSION;
+        firmware_version = FIRMWARE_VERSION;
 #endif
-#ifdef BETAV4
-        board_version = "BETAV4";
-#else
-        board_version = "BETAV3";
+#ifdef HARDWARE_VERSION
+        hardware_version = "v.1.0.0";
 #endif
 #ifdef WRITE_DATE
         write_date = WRITE_DATE;

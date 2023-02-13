@@ -1,5 +1,6 @@
-// libs (to help compilation)
-#include <Arduino.h>
+#pragma once
+
+// libs
 #include <TimeLib.h>
 
 namespace TimeHelpers

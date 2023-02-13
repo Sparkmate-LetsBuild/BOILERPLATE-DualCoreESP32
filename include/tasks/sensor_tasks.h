@@ -1,7 +1,7 @@
 // configs
 #include <configs/OPERATIONS_config.h>
 
-//bricks
+// bricks
 #include <bricks/accelerometer.h>
 
 namespace SensorTasks

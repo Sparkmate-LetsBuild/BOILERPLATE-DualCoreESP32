@@ -3,8 +3,6 @@
 // I2C (Accel)
 #define I2C_SDA 21
 #define I2C_SCL 22
-#define ACCEL_INT1 34
-#define ACCEL_INT2 35
 
 // SPI (SD Card)
 #define SD_SCK 18

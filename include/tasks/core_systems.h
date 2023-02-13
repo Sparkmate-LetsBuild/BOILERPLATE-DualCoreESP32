@@ -4,9 +4,10 @@
 #include <configs/HARDWARE_config.h>
 #include <configs/OPERATIONS_config.h>
 
-//bricks
+// bricks
 #include <inits/firmware_details_init.h>
 #include <bricks/file_handler.h>
+#include <bricks/accelerometer.h>
 
 // libs
 #include <StatusLogger.h>
@@ -41,9 +42,15 @@ namespace CoreSystemsTasks
             }
         }
 
-#ifdef HARDWARE_ACCEL
-        ACCELEROMETER::initAccel();
-#endif
+        if (!Accelerometer::initAccel())
+        {
+            Serial.print("Failed to find the accelerometer. I can't start the session");
+            while (1)
+            {
+                delay(1000);
+                Serial.print(".");
+            }
+        }
     }
 
     /**
