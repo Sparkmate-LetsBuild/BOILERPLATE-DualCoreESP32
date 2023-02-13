@@ -8,6 +8,8 @@
 #include <Arduino.h>
 #include <StatusLogger.h>
 
+// We adopt separate files and namespaces for different tasks for
+// .. when our systems have a large number of tasks to jump between.
 namespace PeripheralsTasks
 {
     /**
@@ -18,13 +20,20 @@ namespace PeripheralsTasks
     void c0_bufferWriteToSD(void *param)
     {
         unsigned long vT_t0_loop;
+
+        // We're going to to use "ticks" to ensure we're executing a task every X milliseconds.
+        // You can also use a bit of maths + elapsed time twinned with vTaskDelay(...), but this is less precise.
         TickType_t xLastWakeTime;
         const TickType_t xFrequency = 250; // happens every 250ms
         xLastWakeTime = xTaskGetTickCount();
+
+        // Every 1 second I want the Serial Monitor to log that we're still performing as expected
         int count = 0;
-        TickType_t ticks_before = xTaskGetTickCount();
         int spare_tick_count = 0;
+        TickType_t ticks_before = xTaskGetTickCount();
+
         for (;;)
+        // run forever
         {
             vT_t0_loop = millis();
 
@@ -36,7 +45,7 @@ namespace PeripheralsTasks
             int delay_for = xFrequency - (millis() - vT_t0_loop);
             if (delay_for < 0)
             {
-                Serial.print("Shit. Writing to the SD card took ");
+                Serial.print("Ahhh noooo. Writing to the SD card took ");
                 Serial.print(xFrequency - delay_for);
                 Serial.println(" ms!");
             }
